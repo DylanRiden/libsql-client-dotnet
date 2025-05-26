@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Libsql.Client.Extensions
 {
-    internal static class CustomMarshal
+    public static class CustomMarshal
     {
         public static string PtrToStringUTF8(IntPtr ptr)
         {

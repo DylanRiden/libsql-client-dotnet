@@ -1,4 +1,4 @@
-﻿using Libsql.Client;
+﻿using Libsql.Client.Ado;
 
 // Create a database client using the static factory method
 using var dbClient = await DatabaseClient.Create(opts => {

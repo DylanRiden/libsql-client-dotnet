@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <PackageId>EntityFrameworkCore.LibSql</PackageId>
+        <Version>0.1.0-alpha</Version>
+        <Authors>Your Name</Authors>
+        <Description>Entity Framework Core provider for libSQL/Turso databases</Description>
+        <PackageTags>EntityFrameworkCore;libSQL;Turso;SQLite;Database</PackageTags>
+        <RepositoryUrl>https://github.com/yourusername/EntityFrameworkCore.LibSql</RepositoryUrl>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.0" />
+        <PackageReference Include="Libsql.Client" Version="0.3.0" />
+    </ItemGroup>
+
+</Project>
