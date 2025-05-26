@@ -13,26 +13,6 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
     {
     }
 
-    protected override void Generate(
-        CreateTableOperation operation,
-        IModel? model,
-        MigrationCommandListBuilder builder)
-    {
-        builder
-            .Append("CREATE TABLE ")
-            .Append(Dependencies.SqlGenerationHelper.DelimitIdentifier(operation.Name))
-            .AppendLine(" (");
-
-        using (builder.Indent())
-        {
-            CreateTableColumns(operation, model, builder);
-            CreateTableConstraints(operation, model, builder);
-        }
-
-        builder.AppendLine(");");
-        EndStatement(builder);
-    }
-
     private void CreateTableColumns(
         CreateTableOperation operation,
         IModel? model,

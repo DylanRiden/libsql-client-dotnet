@@ -37,6 +37,7 @@ public class LibSqlParameterCollection : DbParameterCollection
         ((ICollection)_parameters).CopyTo(array, index);
     }
 
+    // Fix this - specify the generic type
     public override IEnumerator GetEnumerator() => _parameters.GetEnumerator();
 
     public override int IndexOf(object value) => _parameters.IndexOf((LibSqlParameter)value);

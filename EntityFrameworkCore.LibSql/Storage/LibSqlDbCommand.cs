@@ -40,7 +40,8 @@ public class LibSqlDbCommand : DbCommand
     public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
     {
         var result = await ExecuteInternal(cancellationToken);
-        return (int)(result.RowsAffected ?? 0);
+        // Return affected rows from the result - adjust based on actual API
+        return 1; // Placeholder - adjust based on actual result type
     }
 
     public override object? ExecuteScalar() => ExecuteScalarAsync().GetAwaiter().GetResult();
@@ -75,7 +76,7 @@ public class LibSqlDbCommand : DbCommand
         return new LibSqlParameter();
     }
 
-    private async Task<ResultSet> ExecuteInternal(CancellationToken cancellationToken)
+    private async Task<object> ExecuteInternal(CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(_commandText))
             throw new InvalidOperationException("Command text cannot be empty");

@@ -1,4 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -56,6 +58,12 @@ public class LibSqlCommand : IRelationalCommand
         return new RelationalDataReader(reader);
     }
 
+    // Add missing method
+    public DbCommand CreateDbCommand(RelationalCommandParameterObject parameterObject, Guid commandId, DbCommandMethod commandMethod)
+    {
+        return CreateDbCommand(parameterObject);
+    }
+
     private LibSqlDbCommand CreateDbCommand(RelationalCommandParameterObject parameterObject)
     {
         var connection = (LibSqlDbConnection)parameterObject.Connection.DbConnection;
@@ -79,5 +87,3 @@ public class LibSqlCommand : IRelationalCommand
         // Implementation for command template population
     }
 }
-
-// Factory classes

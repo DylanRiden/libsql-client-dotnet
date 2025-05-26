@@ -28,4 +28,10 @@ public class LibSqlHistoryRepository : HistoryRepository
 
     public override string GetDeleteScript(string migrationId) =>
         $"""DELETE FROM "__EFMigrationsHistory" WHERE "MigrationId" = '{migrationId}';""";
+    
+    public override string GetCreateIfNotExistsScript() => GetCreateScript();
+    public override string GetBeginIfNotExistsScript(string migrationId) => "";
+    public override string GetBeginIfExistsScript(string migrationId) => "";
+    public override string GetEndIfScript() => "";
+    protected override bool InterpretExistsResult(object? value) => (long?)value > 0;
 }

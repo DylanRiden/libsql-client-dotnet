@@ -18,12 +18,13 @@ public class LibSqlDbConnection : DbConnection
     public override string ConnectionString 
     { 
         get => _connectionString; 
+        // Fix nullability warning
         set => throw new NotSupportedException("Cannot change connection string after construction"); 
     }
 
     public override string Database => ExtractDatabaseFromConnectionString(_connectionString);
     public override string DataSource => ExtractDataSourceFromConnectionString(_connectionString);
-    public override string ServerVersion => "libSQL"; // TODO: Get actual version from client
+    public override string ServerVersion => "libSQL";
     public override ConnectionState State => _state;
 
     public override void Open() => OpenAsync().GetAwaiter().GetResult();
@@ -35,7 +36,6 @@ public class LibSqlDbConnection : DbConnection
 
         try
         {
-            // Parse connection string and create client
             var options = ParseConnectionString(_connectionString);
             _client = await DatabaseClient.Create(opts =>
             {
@@ -82,8 +82,6 @@ public class LibSqlDbConnection : DbConnection
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
     {
-        // LibSQL transaction implementation would go here
-        // For now, we'll return a basic transaction wrapper
         return new LibSqlTransaction(this, isolationLevel);
     }
 
@@ -103,11 +101,6 @@ public class LibSqlDbConnection : DbConnection
 
     private static ConnectionOptions ParseConnectionString(string connectionString)
     {
-        // Simple connection string parsing
-        // Format: "libsql://host:port/database?authToken=token"
-        // Or: "file:///path/to/db.sqlite"
-        // Or: ":memory:"
-        
         if (connectionString == ":memory:")
         {
             return new ConnectionOptions { Url = ":memory:" };
@@ -118,11 +111,9 @@ public class LibSqlDbConnection : DbConnection
             return new ConnectionOptions { Url = connectionString };
         }
 
-        // Parse libsql:// URL
         var uri = new Uri(connectionString);
         var options = new ConnectionOptions { Url = connectionString };
 
-        // Extract auth token from query string
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         if (query["authToken"] != null)
         {

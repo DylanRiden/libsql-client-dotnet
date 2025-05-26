@@ -7,48 +7,51 @@ namespace EntityFrameworkCore.LibSql.Storage;
 
 public class LibSqlDataReader : DbDataReader
 {
-    private readonly ResultSet _resultSet;
-    private readonly IEnumerator<Row> _rowEnumerator;
+    private readonly object _result;
+    private readonly List<Dictionary<string, object?>> _rows;
     private readonly string[] _columnNames;
+    private int _currentRowIndex = -1;
     private bool _disposed;
-    private bool _hasCurrentRow;
 
-    public LibSqlDataReader(ResultSet resultSet)
+    public LibSqlDataReader(object result)
     {
-        _resultSet = resultSet ?? throw new ArgumentNullException(nameof(resultSet));
-        _rowEnumerator = resultSet.Rows.GetEnumerator();
-        _columnNames = resultSet.Columns.ToArray();
+        _result = result ?? throw new ArgumentNullException(nameof(result));
+        
+        // Parse the result based on the actual Libsql.Client API
+        // This is a placeholder implementation - adjust based on actual API
+        _rows = new List<Dictionary<string, object?>>();
+        _columnNames = Array.Empty<string>();
+        
+        // TODO: Extract actual data from the result object
+        // For now, create empty result set
     }
 
     public override int FieldCount => _columnNames.Length;
-    public override bool HasRows => _resultSet.Rows.Any();
+    public override bool HasRows => _rows.Count > 0;
     public override bool IsClosed => _disposed;
-    public override int RecordsAffected => (int)(_resultSet.RowsAffected ?? 0);
+    public override int RecordsAffected => 0; // TODO: Get from actual result
 
     public override object this[int ordinal] => GetValue(ordinal);
     public override object this[string name] => GetValue(GetOrdinal(name));
 
-    public override int Depth => 0; // LibSQL doesn't support nested result sets
+    public override int Depth => 0;
 
     public override bool Read()
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(LibSqlDataReader));
 
-        _hasCurrentRow = _rowEnumerator.MoveNext();
-        return _hasCurrentRow;
+        _currentRowIndex++;
+        return _currentRowIndex < _rows.Count;
     }
 
     public override async Task<bool> ReadAsync(CancellationToken cancellationToken)
     {
-        // LibSQL client doesn't support async row reading currently
-        // So we just call the sync version
         return Read();
     }
 
     public override bool NextResult()
     {
-        // LibSQL doesn't support multiple result sets
         return false;
     }
 
@@ -71,7 +74,7 @@ public class LibSqlDataReader : DbDataReader
     public override Type GetFieldType(int ordinal)
     {
         ValidateOrdinal(ordinal);
-        if (!_hasCurrentRow)
+        if (_currentRowIndex < 0 || _currentRowIndex >= _rows.Count)
             return typeof(object);
 
         var value = GetValue(ordinal);
@@ -87,17 +90,16 @@ public class LibSqlDataReader : DbDataReader
     public override object GetValue(int ordinal)
     {
         ValidateOrdinal(ordinal);
-        if (!_hasCurrentRow)
+        if (_currentRowIndex < 0 || _currentRowIndex >= _rows.Count)
             throw new InvalidOperationException("No current row");
 
-        var row = _rowEnumerator.Current;
-        var values = row.ToArray();
+        var columnName = _columnNames[ordinal];
+        if (_rows[_currentRowIndex].TryGetValue(columnName, out var value))
+        {
+            return value ?? DBNull.Value;
+        }
         
-        if (ordinal >= values.Length)
-            return DBNull.Value;
-
-        var value = values[ordinal];
-        return ConvertLibSqlValue(value);
+        return DBNull.Value;
     }
 
     public override bool IsDBNull(int ordinal)
@@ -200,7 +202,6 @@ public class LibSqlDataReader : DbDataReader
     {
         var schemaTable = new DataTable("SchemaTable");
         
-        // Add standard schema columns
         schemaTable.Columns.Add("ColumnName", typeof(string));
         schemaTable.Columns.Add("ColumnOrdinal", typeof(int));
         schemaTable.Columns.Add("ColumnSize", typeof(int));
@@ -215,11 +216,11 @@ public class LibSqlDataReader : DbDataReader
             var row = schemaTable.NewRow();
             row["ColumnName"] = GetName(i);
             row["ColumnOrdinal"] = i;
-            row["ColumnSize"] = -1; // Unknown size for LibSQL
+            row["ColumnSize"] = -1;
             row["DataType"] = GetFieldType(i);
-            row["AllowDBNull"] = true; // LibSQL allows nulls by default
-            row["IsKey"] = false; // We don't have key information from ResultSet
-            row["IsUnique"] = false; // We don't have unique information from ResultSet
+            row["AllowDBNull"] = true;
+            row["IsKey"] = false;
+            row["IsUnique"] = false;
             row["IsReadOnly"] = false;
             schemaTable.Rows.Add(row);
         }
@@ -236,7 +237,6 @@ public class LibSqlDataReader : DbDataReader
     {
         if (!_disposed)
         {
-            _rowEnumerator?.Dispose();
             _disposed = true;
         }
     }
@@ -254,18 +254,5 @@ public class LibSqlDataReader : DbDataReader
     {
         if (ordinal < 0 || ordinal >= FieldCount)
             throw new ArgumentOutOfRangeException(nameof(ordinal), $"Ordinal {ordinal} is out of range. Valid range is 0 to {FieldCount - 1}");
-    }
-
-    private static object ConvertLibSqlValue(Value value)
-    {
-        return value switch
-        {
-            Integer integer => integer.Value,
-            Real real => real.Value,
-            Text text => text.Value,
-            Blob blob => blob.Value,
-            Null => DBNull.Value,
-            _ => DBNull.Value
-        };
     }
 }

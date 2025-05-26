@@ -17,6 +17,7 @@ public class LibSqlParameter : DbParameter
 
     public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
     public override bool IsNullable { get; set; } = true;
+    
     public override string ParameterName 
     { 
         get => _parameterName; 
@@ -34,7 +35,6 @@ public class LibSqlParameter : DbParameter
         set 
         { 
             _value = value;
-            // Auto-infer DbType from value if not explicitly set
             if (_dbType == DbType.Object && value != null)
             {
                 _dbType = InferDbType(value);

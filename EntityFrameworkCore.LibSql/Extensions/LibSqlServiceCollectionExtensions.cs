@@ -18,7 +18,7 @@ public static class LibSqlServiceCollectionExtensions
             .TryAdd<IDatabaseProvider, DatabaseProvider<LibSqlOptionsExtension>>()
             .TryAdd<IRelationalConnection, LibSqlConnection>()
             .TryAdd<IRelationalCommand, LibSqlCommand>()
-            .TryAdd<IRelationalCommandBuilder, LibSqlCommandBuilder>()
+            .TryAdd<IRelationalCommandBuilder>(p => new LibSqlCommandBuilder(p.GetRequiredService<IRelationalTypeMappingSource>()))
             .TryAdd<ISqlGenerationHelper, LibSqlSqlGenerationHelper>()
             .TryAdd<IRelationalTypeMappingSource, LibSqlTypeMappingSource>()
             .TryAdd<IQuerySqlGeneratorFactory, LibSqlQuerySqlGeneratorFactory>()

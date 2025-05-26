@@ -15,4 +15,6 @@ public class LibSqlDatabaseCreator : RelationalDatabaseCreator
     public override Task CreateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public override void Delete() { } // No-op for LibSQL
     public override Task DeleteAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public override bool HasTables() => true;
+    public override Task<bool> HasTablesAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
 }
