@@ -11,8 +11,8 @@ public class LibSqlParameterBasedSqlProcessorFactory : IRelationalParameterBased
         _dependencies = dependencies;
     }
 
-    public RelationalParameterBasedSqlProcessor Create(bool useRelationalNulls)
+    public RelationalParameterBasedSqlProcessor Create(RelationalParameterBasedSqlProcessorParameters parameters)
     {
-        return new RelationalParameterBasedSqlProcessor(_dependencies, useRelationalNulls);
+        return new RelationalParameterBasedSqlProcessor(_dependencies, parameters);
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace EntityFrameworkCore.LibSql.Storage;
 
@@ -47,16 +48,33 @@ public class LibSqlCommand : IRelationalCommand
     public RelationalDataReader ExecuteReader(RelationalCommandParameterObject parameterObject)
     {
         var command = CreateDbCommand(parameterObject);
-        var reader = command.ExecuteReader();
-        return new RelationalDataReader(reader);
+        var reader = new LibSqlDataReader(command.ExecuteReader());
+        var logger = parameterObject.Context?.GetService<IRelationalCommandDiagnosticsLogger>();
+        var intReader = new RelationalDataReader();
+        
+        intReader.Initialize(parameterObject.Connection,
+            command,
+            reader,
+            Guid.NewGuid(),
+            logger);
+        return intReader;
     }
 
     public async Task<RelationalDataReader> ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken = default)
     {
         var command = CreateDbCommand(parameterObject);
-        var reader = await command.ExecuteReaderAsync(cancellationToken);
-        return new RelationalDataReader(reader);
+        var reader = new LibSqlDataReader(await command.ExecuteReaderAsync(cancellationToken));
+        var logger = parameterObject.Context?.GetService<IRelationalCommandDiagnosticsLogger>();
+        var intReader = new RelationalDataReader();
+        
+        intReader.Initialize(parameterObject.Connection,
+            command,
+            reader,
+            Guid.NewGuid(),
+            logger);
+        return intReader;
     }
+
 
     // Add missing method
     public DbCommand CreateDbCommand(RelationalCommandParameterObject parameterObject, Guid commandId, DbCommandMethod commandMethod)

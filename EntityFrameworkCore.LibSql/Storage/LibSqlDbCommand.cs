@@ -57,9 +57,10 @@ public class LibSqlDbCommand : DbCommand
     }
 
     protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) =>
-        ExecuteDbDataReaderAsync(behavior).GetAwaiter().GetResult();
+        ExecuteDbDataReaderAsync(behavior, default).GetAwaiter().GetResult();
 
-    protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior, CancellationToken cancellationToken)
+    protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior,
+        CancellationToken cancellationToken)
     {
         var result = await ExecuteInternal(cancellationToken);
         return new LibSqlDataReader(result);

@@ -1,4 +1,5 @@
-﻿using System.Data.Common;
+﻿using System.Collections;
+using System.Data.Common;
 
 namespace EntityFrameworkCore.LibSql.Storage;
 
@@ -36,9 +37,8 @@ public class LibSqlParameterCollection : DbParameterCollection
     {
         ((ICollection)_parameters).CopyTo(array, index);
     }
-
-    // Fix this - specify the generic type
-    public override IEnumerator GetEnumerator() => _parameters.GetEnumerator();
+    
+    public override IEnumerator GetEnumerator() => ((IEnumerable)_parameters).GetEnumerator();
 
     public override int IndexOf(object value) => _parameters.IndexOf((LibSqlParameter)value);
     public override int IndexOf(string parameterName) => _parameters.FindIndex(p => p.ParameterName == parameterName);

@@ -11,5 +11,5 @@ public class StringTypeMapping : RelationalTypeMapping
     }
 
     protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
-        => new StringTypeMapping(StoreType, parameters.ClrType);
+        => new StringTypeMapping(StoreType, typeof(string));
 }

@@ -17,6 +17,10 @@ public class LibSqlQueryableMethodTranslatingExpressionVisitorFactory : IQueryab
 
     public QueryableMethodTranslatingExpressionVisitor Create(QueryCompilationContext queryCompilationContext)
     {
-        return new RelationalQueryableMethodTranslatingExpressionVisitor(_dependencies, _relationalDependencies, queryCompilationContext);
+        return new RelationalQueryableMethodTranslatingExpressionVisitor(
+            _dependencies,
+            _relationalDependencies,
+            (RelationalQueryCompilationContext)queryCompilationContext
+        );
     }
 }

@@ -45,9 +45,9 @@ public class LibSqlDataReader : DbDataReader
         return _currentRowIndex < _rows.Count;
     }
 
-    public override async Task<bool> ReadAsync(CancellationToken cancellationToken)
+    public override Task<bool> ReadAsync(CancellationToken cancellationToken)
     {
-        return Read();
+        return Task.FromResult(Read());
     }
 
     public override bool NextResult()
@@ -108,9 +108,9 @@ public class LibSqlDataReader : DbDataReader
         return value == null || value == DBNull.Value;
     }
 
-    public override async Task<bool> IsDBNullAsync(int ordinal, CancellationToken cancellationToken)
+    public override Task<bool> IsDBNullAsync(int ordinal, CancellationToken cancellationToken)
     {
-        return IsDBNull(ordinal);
+        return Task.FromResult(IsDBNull(ordinal));
     }
 
     public override bool GetBoolean(int ordinal)

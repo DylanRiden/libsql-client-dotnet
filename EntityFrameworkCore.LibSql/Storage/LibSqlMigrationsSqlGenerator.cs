@@ -6,14 +6,13 @@ namespace EntityFrameworkCore.LibSql.Storage;
 
 public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
 {
-    public LibSqlMigrationsSqlGenerator(
-        MigrationsSqlGeneratorDependencies dependencies,
-        IRelationalAnnotationProvider migrationsAnnotations)
-        : base(dependencies, migrationsAnnotations)
+    public LibSqlMigrationsSqlGenerator(MigrationsSqlGeneratorDependencies dependencies)
+        : base(dependencies)
     {
     }
 
-    private void CreateTableColumns(
+    // Add override keywords to fix warnings
+    protected override void CreateTableColumns(
         CreateTableOperation operation,
         IModel? model,
         MigrationCommandListBuilder builder)
@@ -30,7 +29,7 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
         }
     }
 
-    private void CreateTableConstraints(
+    protected override void CreateTableConstraints(
         CreateTableOperation operation,
         IModel? model,
         MigrationCommandListBuilder builder)
@@ -48,7 +47,7 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
         }
     }
 
-    protected virtual void ColumnDefinition(
+    protected override void ColumnDefinition(
         AddColumnOperation operation,
         IModel? model,
         MigrationCommandListBuilder builder)
@@ -65,9 +64,10 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
 
         if (operation.DefaultValue != null)
         {
+            // Fix: Use correct method name
             builder
                 .Append(" DEFAULT ")
-                .Append(Dependencies.SqlGenerationHelper.GenerateLiteral(operation.DefaultValue));
+                .Append(GenerateSqlLiteral(operation.DefaultValue));
         }
         else if (!string.IsNullOrEmpty(operation.DefaultValueSql))
         {
@@ -88,6 +88,19 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
             _ when clrType == typeof(DateTime) || clrType == typeof(DateTimeOffset) => "TEXT",
             _ when clrType == typeof(Guid) => "TEXT",
             _ => "TEXT"
+        };
+    }
+
+    private string GenerateSqlLiteral(object value)
+    {
+        return value switch
+        {
+            null => "NULL",
+            string s => $"'{s.Replace("'", "''")}'",
+            bool b => b ? "1" : "0",
+            DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss.FFFFFFF}'",
+            Guid g => $"'{g}'",
+            _ => value.ToString() ?? "NULL"
         };
     }
 }
