@@ -188,13 +188,7 @@ public class LibSqlDbConnection : DbConnection
     {
         try
         {
-            var options = ParseConnectionString(connectionString);
-            return await DatabaseClient.Create(opts =>
-            {
-                opts.Url = connectionString;
-                if (!string.IsNullOrEmpty(options.AuthToken))
-                    opts.AuthToken = options.AuthToken;
-            });
+            return await DatabaseClient.Create(connectionString);
         }
         catch (Exception ex)
         {

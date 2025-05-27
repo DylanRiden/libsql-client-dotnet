@@ -19,7 +19,7 @@ public class SimpleContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseLibSql(":memory:");
+        optionsBuilder.UseLibSql("../test-ef.db");
     }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -39,8 +39,8 @@ class Program
     {
         try
         {
-            // Test the LibSQL connection sharing directly
-            await DirectConnectionTest.RunTest();
+            // Test the direct LibSQL client first
+            await SimpleFileTest.RunTest();
         }
         catch (Exception ex)
         {
