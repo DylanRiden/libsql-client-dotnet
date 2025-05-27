@@ -16,7 +16,6 @@ public class TestUser
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
-// Simple test context
 public class BasicTestContext : DbContext
 {
     private readonly string _connectionString;
@@ -41,10 +40,26 @@ public class BasicTestContext : DbContext
         modelBuilder.Entity<TestUser>(entity =>
         {
             entity.HasKey(e => e.Id);
-            // Use manual IDs for now - this will test the basic provider functionality
-            entity.Property(e => e.Id).ValueGeneratedNever();
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
+
+            // FIXED: For manual ID assignment, we need to explicitly configure this
+            entity.Property(e => e.Id)
+                .ValueGeneratedNever() // We're setting IDs manually
+                .HasColumnType("INTEGER")
+                .IsRequired();
+
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasColumnType("TEXT");
+
+            entity.Property(e => e.Email)
+                .IsRequired()
+                .HasMaxLength(200)
+                .HasColumnType("TEXT");
+
+            entity.Property(e => e.CreatedAt)
+                .IsRequired()
+                .HasColumnType("TEXT");
         });
     }
 }
@@ -224,7 +239,229 @@ public class BasicLibSqlEFTest
             CleanupTestDatabase();
         }
     }
+    
+    public static async Task TestAutoIncrementIds()
+{
+    Console.WriteLine("=== AUTO INCREMENT ID TEST ===\n");
 
+    try
+    {
+        var connectionString = ":memory:";
+        using var context = new AutoIncrementTestContext(connectionString);
+
+        await context.Database.EnsureCreatedAsync();
+        Console.WriteLine("✓ Database created\n");
+
+        // Create users without setting ID - let SQLite generate them
+        var users = new[]
+        {
+            new AutoIncrementTestUser { Name = "Auto User 1", Email = "auto1@test.com" },
+            new AutoIncrementTestUser { Name = "Auto User 2", Email = "auto2@test.com" },
+            new AutoIncrementTestUser { Name = "Auto User 3", Email = "auto3@test.com" }
+        };
+
+        Console.WriteLine("Adding users with auto-generated IDs:");
+        foreach (var user in users)
+        {
+            Console.WriteLine($"  Before: ID={user.Id}, Name={user.Name}");
+        }
+
+        context.Users.AddRange(users);
+        
+        // Check entity states
+        foreach (var entry in context.ChangeTracker.Entries<AutoIncrementTestUser>())
+        {
+            Console.WriteLine($"Entity {entry.Entity.Name}: State={entry.State}, ID={entry.Entity.Id}");
+        }
+
+        Console.WriteLine("\nSaving changes...");
+        var result = await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Saved {result} changes");
+
+        Console.WriteLine("\nAfter save:");
+        foreach (var user in users)
+        {
+            Console.WriteLine($"  After: ID={user.Id}, Name={user.Name}");
+        }
+
+        // Query back the data
+        var savedUsers = await context.Users.ToListAsync();
+        Console.WriteLine($"\nRetrieved {savedUsers.Count} users from database:");
+        foreach (var user in savedUsers)
+        {
+            Console.WriteLine($"  ID={user.Id}, Name={user.Name}, Email={user.Email}");
+        }
+
+        Console.WriteLine("\n🎉 Auto-increment test passed!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Auto-increment test failed: {ex.Message}");
+        Console.WriteLine($"Exception: {ex.GetType().Name}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    }
+}
+    
+    // Let's test if we can execute raw SQL to isolate the issue
+
+    public static async Task TestRawSql()
+    {
+        Console.WriteLine("=== RAW SQL TEST ===\n");
+
+        try
+        {
+            var connectionString = ":memory:";
+            using var context = new AutoIdContext(connectionString);
+
+            await context.Database.EnsureCreatedAsync();
+            Console.WriteLine("✓ Database created\n");
+
+            // Try executing raw SQL instead of using EF Core's update pipeline
+            Console.WriteLine("Executing raw INSERT SQL...");
+        
+            var result = await context.Database.ExecuteSqlRawAsync(
+                "INSERT INTO AutoIdUser (Name, Email) VALUES ('Raw Test', 'raw@test.com')");
+        
+            Console.WriteLine($"✓ Raw SQL executed, affected rows: {result}");
+
+            // Try to query it back
+            Console.WriteLine("Querying data back...");
+            var users = await context.Users.ToListAsync();
+        
+            Console.WriteLine($"Found {users.Count} users:");
+            foreach (var user in users)
+            {
+                Console.WriteLine($"  ID: {user.Id}, Name: {user.Name}, Email: {user.Email}");
+            }
+
+            Console.WriteLine("\n🎉 Raw SQL test passed!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Raw SQL test failed: {ex.Message}");
+            Console.WriteLine($"Exception type: {ex.GetType().Name}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+    }
+    
+    public static async Task TestAutoGeneratedIds()
+{
+    Console.WriteLine("=== AUTO-GENERATED ID TEST ===\n");
+
+    try
+    {
+        var connectionString = ":memory:";
+        using var context = new AutoIdContext(connectionString);
+
+        await context.Database.EnsureCreatedAsync();
+        Console.WriteLine("✓ Database created\n");
+
+        // Create user without setting ID - let EF/LibSQL auto-generate it
+        var user = new AutoIdUser 
+        { 
+            Name = "Auto User", 
+            Email = "auto@test.com"
+        };
+
+        Console.WriteLine($"Before adding to context:");
+        Console.WriteLine($"  Id: {user.Id} (should be 0)");
+        Console.WriteLine($"  Name: {user.Name}");
+
+        context.Users.Add(user);
+
+        // Check entity state
+        var entry = context.Entry(user);
+        Console.WriteLine($"\nEntity state: {entry.State}");
+        Console.WriteLine($"Id property metadata - ValueGenerated: {entry.Property(e => e.Id).Metadata.ValueGenerated}");
+
+        Console.WriteLine("\nAttempting to save...");
+        var result = await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Saved {result} changes");
+
+        Console.WriteLine($"\nAfter save:");
+        Console.WriteLine($"  Id: {user.Id} (should be auto-generated)");
+        Console.WriteLine($"  Name: {user.Name}");
+
+        // Query back to verify
+        var savedUser = await context.Users.FirstOrDefaultAsync();
+        if (savedUser != null)
+        {
+            Console.WriteLine($"\nRetrieved from DB:");
+            Console.WriteLine($"  Id: {savedUser.Id}");
+            Console.WriteLine($"  Name: {savedUser.Name}");
+            Console.WriteLine($"  Email: {savedUser.Email}");
+        }
+
+        Console.WriteLine("\n🎉 Auto-generated ID test passed!");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Auto-generated ID test failed: {ex.Message}");
+        Console.WriteLine($"Exception type: {ex.GetType().Name}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    }
+}
+
+    // Add this debug method to your BasicLibSqlEFTest class to understand what's happening
+
+public static async Task DebugManualIds()
+{
+    Console.WriteLine("=== DEBUG: Manual ID Issue ===\n");
+
+    try
+    {
+        var connectionString = ":memory:";
+        using var context = new BasicTestContext(connectionString);
+
+        await context.Database.EnsureCreatedAsync();
+        Console.WriteLine("✓ Database created\n");
+
+        // Create a single user with explicit debugging
+        var user = new TestUser 
+        { 
+            Id = 1, 
+            Name = "Test User", 
+            Email = "test@example.com",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        Console.WriteLine($"Before adding to context:");
+        Console.WriteLine($"  Id: {user.Id}");
+        Console.WriteLine($"  Name: {user.Name}");
+        Console.WriteLine($"  Email: {user.Email}");
+
+        context.Users.Add(user);
+
+        // Check the entity state before saving
+        var entry = context.Entry(user);
+        Console.WriteLine($"\nEntity state: {entry.State}");
+        Console.WriteLine($"Property states:");
+        foreach (var prop in entry.Properties)
+        {
+            Console.WriteLine($"  {prop.Metadata.Name}: {prop.CurrentValue} (IsModified: {prop.IsModified})");
+        }
+
+        // Check if EF Core sees the key value
+        var keyValues = entry.Metadata.FindPrimaryKey()?.Properties
+            .Select(p => entry.Property(p.Name).CurrentValue)
+            .ToArray();
+        
+        Console.WriteLine($"\nPrimary key values seen by EF Core: [{string.Join(", ", keyValues?.Select(v => v?.ToString() ?? "null") ?? new[] { "null" })}]");
+
+        // Try to save
+        Console.WriteLine($"\nAttempting to save...");
+        var result = await context.SaveChangesAsync();
+        Console.WriteLine($"✓ Saved {result} changes");
+
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"❌ Debug failed: {ex.Message}");
+        Console.WriteLine($"Exception type: {ex.GetType().Name}");
+        Console.WriteLine($"Stack trace: {ex.StackTrace}");
+    }
+}
+    
     private static void CleanupTestDatabase()
     {
         try
@@ -241,3 +478,93 @@ public class BasicLibSqlEFTest
         }
     }
 }
+
+// Let's try a completely different approach - use auto-increment IDs first to get basic functionality working
+
+public class AutoIncrementTestUser
+{
+    public int Id { get; set; }  // Will be auto-generated by SQLite
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
+
+public class AutoIncrementTestContext : DbContext
+{
+    private readonly string _connectionString;
+
+    public AutoIncrementTestContext(string connectionString)
+    {
+        _connectionString = connectionString;
+    }
+
+    public DbSet<AutoIncrementTestUser> Users => Set<AutoIncrementTestUser>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseLibSql(_connectionString);
+        optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Debug);
+        optionsBuilder.EnableSensitiveDataLogging();
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AutoIncrementTestUser>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            
+            // Let SQLite handle ID generation automatically
+            entity.Property(e => e.Id)
+                .ValueGeneratedOnAdd()  // This is the default, but let's be explicit
+                .HasColumnType("INTEGER");
+            
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasColumnType("TEXT");
+                
+            entity.Property(e => e.Email)
+                .IsRequired()
+                .HasColumnType("TEXT");
+        });
+    }
+}
+
+// Add this to your BasicLibSqlEFTest class
+
+public class AutoIdUser
+{
+    public int Id { get; set; }  // Will be auto-generated
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
+
+public class AutoIdContext : DbContext
+{
+    private readonly string _connectionString;
+
+    public AutoIdContext(string connectionString)
+    {
+        _connectionString = connectionString;
+    }
+
+    public DbSet<AutoIdUser> Users => Set<AutoIdUser>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseLibSql(_connectionString);
+        optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Debug);
+        optionsBuilder.EnableSensitiveDataLogging();
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AutoIdUser>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            // Let EF Core handle auto-generation (default behavior)
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.Name).IsRequired();
+            entity.Property(e => e.Email).IsRequired();
+        });
+    }
+}
+

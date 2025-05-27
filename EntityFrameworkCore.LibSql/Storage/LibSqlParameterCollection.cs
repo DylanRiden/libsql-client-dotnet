@@ -10,10 +10,14 @@ public class LibSqlParameterCollection : DbParameterCollection
     public override int Count => _parameters.Count;
     public override object SyncRoot => _parameters;
 
+    // Add indexer to access parameters
+    public LibSqlParameter this[int index] => _parameters[index];
+
     public override int Add(object value)
     {
         if (value is LibSqlParameter param)
         {
+            Console.WriteLine($"DEBUG LibSqlParameterCollection: Adding parameter {param.ParameterName} = {param.Value}");
             _parameters.Add(param);
             return _parameters.Count - 1;
         }
@@ -28,7 +32,11 @@ public class LibSqlParameterCollection : DbParameterCollection
         }
     }
 
-    public override void Clear() => _parameters.Clear();
+    public override void Clear() 
+    {
+        Console.WriteLine($"DEBUG LibSqlParameterCollection: Clearing {_parameters.Count} parameters");
+        _parameters.Clear();
+    }
 
     public override bool Contains(object value) => _parameters.Contains(value);
     public override bool Contains(string value) => _parameters.Any(p => p.ParameterName == value);
@@ -38,7 +46,7 @@ public class LibSqlParameterCollection : DbParameterCollection
         ((ICollection)_parameters).CopyTo(array, index);
     }
     
-    public override IEnumerator GetEnumerator() => ((IEnumerable)_parameters).GetEnumerator();
+    public override IEnumerator GetEnumerator() => _parameters.GetEnumerator();
 
     public override int IndexOf(object value) => _parameters.IndexOf((LibSqlParameter)value);
     public override int IndexOf(string parameterName) => _parameters.FindIndex(p => p.ParameterName == parameterName);
@@ -47,6 +55,7 @@ public class LibSqlParameterCollection : DbParameterCollection
     {
         if (value is LibSqlParameter param)
         {
+            Console.WriteLine($"DEBUG LibSqlParameterCollection: Inserting parameter {param.ParameterName} at index {index}");
             _parameters.Insert(index, param);
         }
         else
@@ -59,11 +68,17 @@ public class LibSqlParameterCollection : DbParameterCollection
     {
         if (value is LibSqlParameter param)
         {
+            Console.WriteLine($"DEBUG LibSqlParameterCollection: Removing parameter {param.ParameterName}");
             _parameters.Remove(param);
         }
     }
 
-    public override void RemoveAt(int index) => _parameters.RemoveAt(index);
+    public override void RemoveAt(int index) 
+    {
+        Console.WriteLine($"DEBUG LibSqlParameterCollection: Removing parameter at index {index}");
+        _parameters.RemoveAt(index);
+    }
+    
     public override void RemoveAt(string parameterName)
     {
         var index = IndexOf(parameterName);
@@ -77,13 +92,18 @@ public class LibSqlParameterCollection : DbParameterCollection
     protected override DbParameter GetParameter(string parameterName)
     {
         var param = _parameters.FirstOrDefault(p => p.ParameterName == parameterName);
-        return param ?? throw new ArgumentException($"Parameter '{parameterName}' not found");
+        if (param == null)
+        {
+            throw new ArgumentException($"Parameter '{parameterName}' not found");
+        }
+        return param;
     }
 
     protected override void SetParameter(int index, DbParameter value)
     {
         if (value is LibSqlParameter param)
         {
+            Console.WriteLine($"DEBUG LibSqlParameterCollection: Setting parameter at index {index} to {param.ParameterName}");
             _parameters[index] = param;
         }
         else

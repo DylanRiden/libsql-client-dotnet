@@ -7,11 +7,11 @@ namespace EntityFrameworkCore.LibSql.Storage;
 
 public class LibSqlTransactionFactory : IRelationalTransactionFactory
 {
-    private readonly ISqlGenerationHelper _sqlGenerationHelper;
+    private readonly RelationalTransactionFactoryDependencies _dependencies;
 
-    public LibSqlTransactionFactory(ISqlGenerationHelper sqlGenerationHelper)
+    public LibSqlTransactionFactory(RelationalTransactionFactoryDependencies dependencies)
     {
-        _sqlGenerationHelper = sqlGenerationHelper;
+        _dependencies = dependencies;
     }
 
     public RelationalTransaction Create(
@@ -21,6 +21,6 @@ public class LibSqlTransactionFactory : IRelationalTransactionFactory
         IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> logger,
         bool transactionOwned)
     {
-        return new RelationalTransaction(connection, transaction, transactionId, logger, transactionOwned, _sqlGenerationHelper);
+        return new RelationalTransaction(connection, transaction, transactionId, logger, transactionOwned, _dependencies.SqlGenerationHelper);
     }
 }

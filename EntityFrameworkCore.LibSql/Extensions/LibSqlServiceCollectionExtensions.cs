@@ -11,11 +11,14 @@ using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Microsoft.EntityFrameworkCore.Sqlite.Migrations.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using EntityFrameworkCore.LibSql.Infrastructure;
 using EntityFrameworkCore.LibSql.Storage;
 using EntityFrameworkCore.LibSql.Extensions;
+using Microsoft.EntityFrameworkCore.Sqlite.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Update.Internal;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
@@ -110,17 +113,45 @@ public static class LibSqlServiceCollectionExtensions
             .TryAdd<LoggingDefinitions, LibSqlLoggingDefinitions>()
             .TryAdd<IDatabaseProvider, DatabaseProvider<LibSqlOptionsExtension>>()
         
-            // Only the services that need to be LibSQL-specific
-            .TryAdd<IRelationalConnection, LibSqlConnection>()
-            .TryAdd<IRelationalDatabaseCreator, LibSqlDatabaseCreator>()
-            .TryAdd<IMigrationsSqlGenerator, LibSqlMigrationsSqlGenerator>()
+            // **CRITICAL: Add the missing SQL generation helper**
+            .TryAdd<ISqlGenerationHelper, LibSqlSqlGenerationHelper>()
         
-            // Type mappings (might be needed for LibSQL-specific types)
-            .TryAdd<IRelationalTypeMappingSource, LibSqlTypeMappingSource>();
+            // Connection and database creation
+            .TryAdd<IRelationalConnection, HttpLibSqlDbConnection>()
+            .TryAdd<IRelationalDatabaseCreator, LibSqlDatabaseCreator>()
+        
+            // Command building and execution
+            .TryAdd<IRelationalCommandBuilderFactory, LibSqlCommandBuilderFactory>()
+        
+            // SQL generation and migrations - using SQLite generator for compatibility
+            .TryAdd<IMigrationsSqlGenerator, SqliteMigrationsSqlGenerator>()
+            .TryAdd<IHistoryRepository, LibSqlHistoryRepository>()
+        
+            // Type mappings - using more SQLite services for compatibility
+            .TryAdd<IRelationalTypeMappingSource, LibSqlTypeMappingSource>()
+        
+            // Query processing
+            .TryAdd<IQuerySqlGeneratorFactory, LibSqlQuerySqlGeneratorFactory>()
+            .TryAdd<IRelationalParameterBasedSqlProcessorFactory, LibSqlParameterBasedSqlProcessorFactory>()
+            .TryAdd<IQueryableMethodTranslatingExpressionVisitorFactory, LibSqlQueryableMethodTranslatingExpressionVisitorFactory>()
+            .TryAdd<ISqlExpressionFactory, LibSqlSqlExpressionFactory>()
+        
+            // Update operations - using SQLite batch factory for compatibility
+            .TryAdd<IUpdateSqlGenerator, LibSqlUpdateSqlGenerator>()
+            .TryAdd<IModificationCommandBatchFactory, SqliteModificationCommandBatchFactory>()
+        
+            // Transaction handling
+            .TryAdd<IRelationalTransactionFactory, LibSqlTransactionFactory>()
+        
+            // Method and member translators for LINQ
+            .TryAdd<IMethodCallTranslatorProvider, LibSqlMethodCallTranslatorProvider>()
+            .TryAdd<IMemberTranslatorProvider, LibSqlMemberTranslatorProvider>()
+        
+            // Execution strategy
+            .TryAdd<IExecutionStrategyFactory, LibSqlExecutionStrategyFactory>();
 
         // Let EF Core handle everything else with defaults
         builder.TryAddCoreServices();
         return serviceCollection;
     }
-    
 }

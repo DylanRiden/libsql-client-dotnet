@@ -11,9 +11,6 @@ public class LibSqlDbConnection : DbConnection
 {
     private readonly string _connectionString;
     private static readonly ConcurrentDictionary<string, IDatabaseClient> _sharedClients = new();
-    private static readonly Lazy<Task<IDatabaseClient>> _memoryClientLazy = new(() => CreateMemoryClient(), true);
-    private static IDatabaseClient? _sharedMemoryClient;
-    private static readonly object _memoryClientLock = new();
     private IDatabaseClient? _client;
     private ConnectionState _state = ConnectionState.Closed;
 
@@ -32,9 +29,10 @@ public class LibSqlDbConnection : DbConnection
     
     public override string ServerVersion => "libSQL";
     
-    public override string Database { get; }
+    // Fixed: Make these nullable to avoid compiler warnings
+    public override string? Database => null;
     
-    public override string DataSource { get; }
+    public override string? DataSource => _connectionString;
     
     public override ConnectionState State => _state;
 
@@ -47,22 +45,23 @@ public class LibSqlDbConnection : DbConnection
         {
             if (_connectionString.StartsWith(":memory:", StringComparison.OrdinalIgnoreCase))
             {
+                // For memory databases, use shared clients
                 _client = _sharedClients.GetOrAdd(_connectionString, _ => 
-                    CreateMemoryClient(_connectionString).GetAwaiter().GetResult());
+                    DatabaseClient.Create(_connectionString).GetAwaiter().GetResult());
             }
             else
             {
                 // For file databases, create individual clients
-                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
-                Console.WriteLine($"DEBUG: Using file client instance: {_client.GetHashCode()}");
+                _client = DatabaseClient.Create(_connectionString).GetAwaiter().GetResult();
             }
                 
             _state = ConnectionState.Open;
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
+            Console.WriteLine($"DEBUG LibSqlDbConnection: Successfully opened connection");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"ERROR in Open: {ex}");
+            Console.WriteLine($"ERROR LibSqlDbConnection.Open: {ex}");
             _state = ConnectionState.Broken;
             throw;
         }
@@ -77,13 +76,14 @@ public class LibSqlDbConnection : DbConnection
         {
             if (_connectionString.StartsWith(":memory:", StringComparison.OrdinalIgnoreCase))
             {
+                // For memory databases, use shared clients
                 if (_sharedClients.TryGetValue(_connectionString, out var existingClient))
                 {
                     _client = existingClient;
                 }
                 else
                 {
-                    var newClient = await CreateMemoryClient(_connectionString);
+                    var newClient = await DatabaseClient.Create(_connectionString);
                     _client = _sharedClients.GetOrAdd(_connectionString, newClient);
                     if (!ReferenceEquals(_client, newClient))
                     {
@@ -94,17 +94,16 @@ public class LibSqlDbConnection : DbConnection
             else
             {
                 // For file databases, create individual clients
-                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
-                Console.WriteLine($"DEBUG: Using file client instance (async): {_client.GetHashCode()}");
+                _client = await DatabaseClient.Create(_connectionString);
             }
                 
             _state = ConnectionState.Open;
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
-            Console.WriteLine($"DEBUG: OpenAsync completed successfully");
+            Console.WriteLine($"DEBUG LibSqlDbConnection: Successfully opened connection async");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"ERROR in OpenAsync: {ex}");
+            Console.WriteLine($"ERROR LibSqlDbConnection.OpenAsync: {ex}");
             _state = ConnectionState.Broken;
             throw;
         }
@@ -119,10 +118,10 @@ public class LibSqlDbConnection : DbConnection
         {
             // Don't dispose shared clients (for :memory: databases)
             // Only dispose non-shared clients (for file databases)
-            if (_connectionString != ":memory:" && _client != null)
+            if (!_connectionString.StartsWith(":memory:", StringComparison.OrdinalIgnoreCase) && _client != null)
             {
-                (_client as IDisposable)?.Dispose();
-                _client = null; // Only null out non-shared clients
+                _client.Dispose();
+                _client = null;
             }
             // For :memory: databases, keep the _client reference to maintain sharing
         }
@@ -131,12 +130,17 @@ public class LibSqlDbConnection : DbConnection
             var previousState = _state;
             _state = ConnectionState.Closed;
             OnStateChange(new StateChangeEventArgs(previousState, ConnectionState.Closed));
+            Console.WriteLine($"DEBUG LibSqlDbConnection: Connection closed");
         }
     }
 
     protected override DbCommand CreateDbCommand()
     {
-        return new LibSqlDbCommand(_client ?? throw new InvalidOperationException("Connection is not open"))
+        if (_client == null)
+            throw new InvalidOperationException("Connection is not open");
+            
+        Console.WriteLine($"DEBUG LibSqlDbConnection: Creating DbCommand");
+        return new LibSqlDbCommand(_client)
         {
             Connection = this
         };
@@ -144,6 +148,7 @@ public class LibSqlDbConnection : DbConnection
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
     {
+        Console.WriteLine($"DEBUG LibSqlDbConnection: Beginning transaction with isolation level {isolationLevel}");
         return new LibSqlTransaction(this, isolationLevel);
     }
 
@@ -160,29 +165,4 @@ public class LibSqlDbConnection : DbConnection
         }
         base.Dispose(disposing);
     }
-
-    private static IDatabaseClient CreateClient(string connectionString)
-    {
-        try
-        {
-            return DatabaseClient.Create(connectionString).GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to create database client for '{connectionString}'. Make sure the path is valid and accessible.", ex);
-        }
-    }
-
-    private static async Task<IDatabaseClient> CreateMemoryClient(string connectionString = ":memory:")
-    {
-        try
-        {
-            return await DatabaseClient.Create(connectionString);
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Failed to create in-memory database client: {ex.Message}", ex);
-        }
-    }
-    
 }

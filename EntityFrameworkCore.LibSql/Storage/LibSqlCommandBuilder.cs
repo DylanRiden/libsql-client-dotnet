@@ -61,7 +61,7 @@ public class LibSqlCommandBuilder : IRelationalCommandBuilder
     public IRelationalCommandBuilder AddParameter(string invariantName, string name)
     {
         Console.WriteLine($"DEBUG LibSqlCommandBuilder.AddParameter: {invariantName} = {name}");
-        var parameter = new SimpleRelationalParameter(invariantName, name);
+        var parameter = new LibSqlRelationalParameter(invariantName, name);
         return AddParameter(parameter);
     }
 
@@ -77,9 +77,9 @@ public class LibSqlCommandBuilder : IRelationalCommandBuilder
     public override string ToString() => _commandTextBuilder.ToString();
 }
 
-public class SimpleRelationalParameter : IRelationalParameter
+public class LibSqlRelationalParameter : IRelationalParameter
 {
-    public SimpleRelationalParameter(string invariantName, string name)
+    public LibSqlRelationalParameter(string invariantName, string name)
     {
         InvariantName = invariantName;
         Name = name;

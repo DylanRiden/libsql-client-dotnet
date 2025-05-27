@@ -79,7 +79,6 @@ public class LibSqlCommand : IRelationalCommand
         return intReader;
     }
 
-
     // Add missing method
     public DbCommand CreateDbCommand(RelationalCommandParameterObject parameterObject, Guid commandId, DbCommandMethod commandMethod)
     {
@@ -95,16 +94,27 @@ public class LibSqlCommand : IRelationalCommand
         Console.WriteLine($"DEBUG LibSqlCommand: Creating command with text: {_commandText}");
         Console.WriteLine($"DEBUG LibSqlCommand: Parameter count: {_parameters.Count}");
 
-        // Add parameters
-        for (int i = 0; i < _parameters.Count; i++)
+        // Improved parameter handling
+        if (parameterObject.ParameterValues != null)
         {
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = _parameters[i].InvariantName;
-            parameter.Value = parameterObject.ParameterValues[_parameters[i].InvariantName];
-        
-            Console.WriteLine($"DEBUG LibSqlCommand: Parameter {parameter.ParameterName} = {parameter.Value}");
-        
-            command.Parameters.Add(parameter);
+            foreach (var parameter in _parameters)
+            {
+                var dbParam = command.CreateParameter();
+                dbParam.ParameterName = parameter.InvariantName;
+                
+                // Get the parameter value, handling null properly
+                if (parameterObject.ParameterValues.TryGetValue(parameter.InvariantName, out var value))
+                {
+                    dbParam.Value = value ?? DBNull.Value;
+                }
+                else
+                {
+                    dbParam.Value = DBNull.Value;
+                }
+                
+                Console.WriteLine($"DEBUG LibSqlCommand: Parameter {dbParam.ParameterName} = {dbParam.Value} (Type: {dbParam.Value?.GetType().Name ?? "null"})");
+                command.Parameters.Add(dbParam);
+            }
         }
 
         return command;

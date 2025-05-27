@@ -1,17 +1,17 @@
 ﻿using System.Data;
 using System.Data.Common;
-using Libsql.Client;
+using EntityFrameworkCore.LibSql.Http;
 
 namespace EntityFrameworkCore.LibSql.Storage;
 
-public class LibSqlDbCommand : DbCommand
+public class HttpLibSqlDbCommand : DbCommand
 {
-    private readonly IDatabaseClient _client;
+    private readonly HttpLibSqlClient _client;
     private string _commandText = string.Empty;
     private readonly LibSqlParameterCollection _parameters;
-    private LibSqlDbConnection? _connection;
+    private HttpLibSqlDbConnection? _connection;
 
-    public LibSqlDbCommand(IDatabaseClient client)
+    public HttpLibSqlDbCommand(HttpLibSqlClient client)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _parameters = new LibSqlParameterCollection();
@@ -31,7 +31,7 @@ public class LibSqlDbCommand : DbCommand
     protected override DbConnection? DbConnection 
     { 
         get => _connection;
-        set => _connection = (LibSqlDbConnection?)value;
+        set => _connection = (HttpLibSqlDbConnection?)value;
     }
     
     protected override DbTransaction? DbTransaction { get; set; }
@@ -39,28 +39,27 @@ public class LibSqlDbCommand : DbCommand
 
     public override void Cancel()
     {
-        // LibSQL doesn't support command cancellation
+        // HTTP requests can't be easily cancelled mid-flight
     }
 
     public override int ExecuteNonQuery() => ExecuteNonQueryAsync().GetAwaiter().GetResult();
 
     public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
     {
-        Console.WriteLine($"DEBUG LibSqlDbCommand: ExecuteNonQueryAsync - SQL: {_commandText}");
-        Console.WriteLine($"DEBUG LibSqlDbCommand: Parameter count: {_parameters.Count}");
+        Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: ExecuteNonQueryAsync - SQL: {_commandText}");
+        Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Parameter count: {_parameters.Count}");
         
         // Debug parameters
         for (int i = 0; i < _parameters.Count; i++)
         {
             var param = _parameters[i];
-            Console.WriteLine($"DEBUG LibSqlDbCommand: Parameter {i}: {param.ParameterName} = {param.Value} (Type: {param.Value?.GetType().Name ?? "null"})");
+            Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Parameter {i}: {param.ParameterName} = {param.Value} (Type: {param.Value?.GetType().Name ?? "null"})");
         }
 
         var result = await ExecuteInternal(cancellationToken);
         
-        // For non-query operations, return affected rows (usually 1 for INSERT/UPDATE/DELETE)
-        // This is a simplified approach - you might need to extract this from the result
-        return 1;
+        // Return the number of affected rows
+        return result.RowsAffected;
     }
 
     public override object? ExecuteScalar() => ExecuteScalarAsync().GetAwaiter().GetResult();
@@ -81,15 +80,14 @@ public class LibSqlDbCommand : DbCommand
     protected override async Task<DbDataReader> ExecuteDbDataReaderAsync(CommandBehavior behavior,
         CancellationToken cancellationToken)
     {
-        Console.WriteLine($"DEBUG LibSqlDbCommand: ExecuteDbDataReaderAsync - SQL: {_commandText}");
+        Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: ExecuteDbDataReaderAsync - SQL: {_commandText}");
         var result = await ExecuteInternal(cancellationToken);
-        return new LibSqlDataReader(result);
+        return new HttpLibSqlDataReader(result);
     }
 
     public override void Prepare()
     {
-        // LibSQL doesn't expose prepared statements in the current client
-        // This could be implemented when/if the client supports it
+        // HTTP-based client doesn't support prepared statements
     }
 
     protected override DbParameter CreateDbParameter()
@@ -97,41 +95,40 @@ public class LibSqlDbCommand : DbCommand
         return new LibSqlParameter();
     }
 
-    private async Task<object> ExecuteInternal(CancellationToken cancellationToken)
+    private async Task<LibSqlResult> ExecuteInternal(CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(_commandText))
             throw new InvalidOperationException("Command text cannot be empty");
 
         try
         {
-            Console.WriteLine($"DEBUG LibSqlDbCommand: Executing SQL: {_commandText}");
+            Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Executing SQL: {_commandText}");
         
-            // Convert parameters to the format expected by LibSQL client
+            // Convert parameters to the format expected by HTTP LibSQL
             var parameterValues = GetParameterValues();
         
-            object result;
             if (parameterValues.Length > 0)
             {
-                Console.WriteLine($"DEBUG LibSqlDbCommand: Executing with {parameterValues.Length} parameters");
+                Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Executing with {parameterValues.Length} parameters");
                 for (int i = 0; i < parameterValues.Length; i++)
                 {
-                    Console.WriteLine($"DEBUG LibSqlDbCommand: Param[{i}] = {parameterValues[i]} ({parameterValues[i]?.GetType().Name ?? "null"})");
+                    Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Param[{i}] = {parameterValues[i]} ({parameterValues[i]?.GetType().Name ?? "null"})");
                 }
-                result = await _client.Execute(_commandText, parameterValues);
             }
             else
             {
-                Console.WriteLine($"DEBUG LibSqlDbCommand: Executing without parameters");
-                result = await _client.Execute(_commandText);
+                Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Executing without parameters");
             }
-        
-            Console.WriteLine($"DEBUG LibSqlDbCommand: Result type = {result.GetType().FullName}");
+
+            var result = await _client.ExecuteAsync(_commandText, parameterValues);
+            
+            Console.WriteLine($"DEBUG HTTP LibSqlDbCommand: Result - RowsAffected: {result.RowsAffected}, Columns: {result.Columns.Length}");
             return result;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"ERROR LibSqlDbCommand: Failed to execute - {ex.Message}");
-            throw new InvalidOperationException($"Error executing LibSQL command: {ex.Message}", ex);
+            Console.WriteLine($"ERROR HTTP LibSqlDbCommand: Failed to execute - {ex.Message}");
+            throw new InvalidOperationException($"Error executing HTTP LibSQL command: {ex.Message}", ex);
         }
     }
     
@@ -150,8 +147,10 @@ public class LibSqlDbCommand : DbCommand
     {
         return value switch
         {
-            null => DBNull.Value,
-            DBNull => DBNull.Value,
+            null => null!,
+            DBNull => null!,
+            DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss.fff"), // ISO format for HTTP
+            bool b => b,
             _ => value
         };
     }
