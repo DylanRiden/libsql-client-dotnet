@@ -21,6 +21,14 @@ using EntityFrameworkCore.LibSql.Extensions;
 namespace Microsoft.Extensions.DependencyInjection;
 
 /// <summary>
+///     LibSQL-specific logging definitions.
+/// </summary>
+public class LibSqlLoggingDefinitions : RelationalLoggingDefinitions
+{
+    // This can be empty for now - it just needs to exist so the DI container can resolve LoggingDefinitions
+}
+
+/// <summary>
 ///     LibSQL specific extension methods for <see cref="IServiceCollection" />.
 /// </summary>
 public static class LibSqlServiceCollectionExtensions
@@ -97,10 +105,8 @@ public static class LibSqlServiceCollectionExtensions
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static IServiceCollection AddEntityFrameworkLibSql(this IServiceCollection serviceCollection)
     {
-        // First add core EF services
-        new EntityFrameworkServicesBuilder(serviceCollection).TryAddCoreServices();
-
         var builder = new EntityFrameworkRelationalServicesBuilder(serviceCollection)
+            .TryAdd<LoggingDefinitions, LibSqlLoggingDefinitions>()
             .TryAdd<IDatabaseProvider, DatabaseProvider<LibSqlOptionsExtension>>()
             .TryAdd<IExecutionStrategyFactory, LibSqlExecutionStrategyFactory>()
             .TryAdd<IQueryableMethodTranslatingExpressionVisitorFactory, LibSqlQueryableMethodTranslatingExpressionVisitorFactory>()
@@ -110,6 +116,7 @@ public static class LibSqlServiceCollectionExtensions
             .TryAdd<IQuerySqlGeneratorFactory, LibSqlQuerySqlGeneratorFactory>()
             .TryAdd<IRelationalTransactionFactory, LibSqlTransactionFactory>()
             .TryAdd<IModificationCommandBatchFactory, LibSqlModificationCommandBatchFactory>()
+            .TryAdd<IUpdateSqlGenerator, LibSqlUpdateSqlGenerator>()
             .TryAdd<IRelationalDatabaseCreator, LibSqlDatabaseCreator>()
             .TryAdd<IHistoryRepository, LibSqlHistoryRepository>()
             .TryAdd<IMigrationsSqlGenerator, LibSqlMigrationsSqlGenerator>()
@@ -126,6 +133,9 @@ public static class LibSqlServiceCollectionExtensions
                         (IRelationalTypeMappingSource)p.GetRequiredService(typeof(IRelationalTypeMappingSource))),
                     ServiceLifetime.Singleton);
             });
+
+        // Add core services - this registers other essential services
+        builder.TryAddCoreServices();
 
         return serviceCollection;
     }
