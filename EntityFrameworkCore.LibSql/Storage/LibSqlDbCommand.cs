@@ -39,6 +39,7 @@ public class LibSqlDbCommand : DbCommand
 
     public override async Task<int> ExecuteNonQueryAsync(CancellationToken cancellationToken)
     {
+        Console.WriteLine($"DEBUG SQL: {_commandText}");
         var result = await ExecuteInternal(cancellationToken);
         // Return affected rows from the result - adjust based on actual API
         return 1; // Placeholder - adjust based on actual result type
@@ -84,24 +85,31 @@ public class LibSqlDbCommand : DbCommand
 
         try
         {
-            // Convert parameters to the format expected by LibSQL client
+            Console.WriteLine($"DEBUG SQL: {_commandText}");
+        
             var parameterValues = GetParameterValues();
-            
+        
+            object result;
             if (parameterValues.Length > 0)
             {
-                return await _client.Execute(_commandText, parameterValues);
+                result = await _client.Execute(_commandText, parameterValues);
             }
             else
             {
-                return await _client.Execute(_commandText);
+                result = await _client.Execute(_commandText);
             }
+        
+            Console.WriteLine($"DEBUG LibSQL Result: type = {result.GetType().FullName}");
+            Console.WriteLine($"DEBUG LibSQL Result: value = {result}");
+        
+            return result;
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"Error executing LibSQL command: {ex.Message}", ex);
         }
     }
-
+    
     private object[] GetParameterValues()
     {
         var values = new object[_parameters.Count];

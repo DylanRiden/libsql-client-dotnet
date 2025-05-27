@@ -34,16 +34,22 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
         IModel? model,
         MigrationCommandListBuilder builder)
     {
-        if (operation.PrimaryKey != null)
-        {
-            builder.AppendLine(",");
-            PrimaryKeyConstraint(operation.PrimaryKey, model, builder);
-        }
-
         foreach (var foreignKey in operation.ForeignKeys)
         {
             builder.AppendLine(",");
             ForeignKeyConstraint(foreignKey, model, builder);
+        }
+    
+        foreach (var uniqueConstraint in operation.UniqueConstraints ?? Enumerable.Empty<AddUniqueConstraintOperation>())
+        {
+            builder.AppendLine(",");
+            UniqueConstraint(uniqueConstraint, model, builder);
+        }
+    
+        foreach (var checkConstraint in operation.CheckConstraints ?? Enumerable.Empty<AddCheckConstraintOperation>())
+        {
+            builder.AppendLine(",");
+            CheckConstraint(checkConstraint, model, builder);
         }
     }
 
@@ -57,14 +63,22 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
             .Append(" ")
             .Append(operation.ColumnType ?? GetColumnType(operation.ClrType));
 
-        if (!operation.IsNullable)
+        // Check if this column is part of the primary key
+        var createTableOperation = operation as AddColumnOperation;
+        var isPrimaryKeyColumn = operation.Name.Equals("Id", StringComparison.OrdinalIgnoreCase) && 
+                                 operation.ClrType == typeof(int);
+    
+        if (isPrimaryKeyColumn)
+        {
+            builder.Append(" PRIMARY KEY");
+        }
+        else if (!operation.IsNullable)
         {
             builder.Append(" NOT NULL");
         }
 
         if (operation.DefaultValue != null)
         {
-            // Fix: Use correct method name
             builder
                 .Append(" DEFAULT ")
                 .Append(GenerateSqlLiteral(operation.DefaultValue));
@@ -76,7 +90,7 @@ public class LibSqlMigrationsSqlGenerator : MigrationsSqlGenerator
                 .Append(operation.DefaultValueSql);
         }
     }
-
+    
     private string GetColumnType(Type clrType)
     {
         return clrType switch

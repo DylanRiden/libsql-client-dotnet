@@ -29,10 +29,13 @@ public class LibSqlDbConnection : DbConnection
         get => _connectionString; 
         set => throw new NotSupportedException("Cannot change connection string after construction"); 
     }
-
-    public override string Database => ExtractDatabaseFromConnectionString(_connectionString);
-    public override string DataSource => ExtractDataSourceFromConnectionString(_connectionString);
+    
     public override string ServerVersion => "libSQL";
+    
+    public override string Database { get; }
+    
+    public override string DataSource { get; }
+    
     public override ConnectionState State => _state;
 
     public override void Open()
@@ -162,21 +165,7 @@ public class LibSqlDbConnection : DbConnection
     {
         try
         {
-            var options = ParseConnectionString(connectionString);
-            // For file paths, ensure we have a proper URI format
-            var url = options.Url;
-            if (!url.StartsWith("file:") && !url.StartsWith("http") && !url.StartsWith("ws"))
-            {
-                // Convert local file path to proper URI format
-                url = $"file:{Path.GetFullPath(url.Replace("file:", ""))}";
-            }
-            
-            return DatabaseClient.Create(opts =>
-            {
-                opts.Url = url;
-                if (!string.IsNullOrEmpty(options.AuthToken))
-                    opts.AuthToken = options.AuthToken;
-            }).GetAwaiter().GetResult();
+            return DatabaseClient.Create(connectionString).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -195,76 +184,5 @@ public class LibSqlDbConnection : DbConnection
             throw new InvalidOperationException($"Failed to create in-memory database client: {ex.Message}", ex);
         }
     }
-
-    private static ConnectionOptions ParseConnectionString(string connectionString)
-    {
-        if (connectionString == ":memory:")
-        {
-            return new ConnectionOptions { Url = ":memory:" };
-        }
-
-        if (connectionString.StartsWith("file://"))
-        {
-            return new ConnectionOptions { Url = connectionString };
-        }
-
-        var uri = new Uri(connectionString);
-        var options = new ConnectionOptions { Url = connectionString };
-
-        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-        if (query["authToken"] != null)
-        {
-            options.AuthToken = query["authToken"];
-        }
-
-        return options;
-    }
-
-    private static string ExtractDatabaseFromConnectionString(string connectionString)
-    {
-        try
-        {
-            if (connectionString == ":memory:")
-                return ":memory:";
-            
-            var uri = new Uri(connectionString);
-            return Path.GetFileName(uri.LocalPath) ?? "unknown";
-        }
-        catch
-        {
-            return "unknown";
-        }
-    }
-
-    private static string ExtractDataSourceFromConnectionString(string connectionString)
-    {
-        try
-        {
-            if (connectionString == ":memory:")
-                return ":memory:";
-            
-            var uri = new Uri(connectionString);
-            return uri.Host ?? "unknown";
-        }
-        catch
-        {
-            return connectionString;
-        }
-    }
-
-    // Static method to cleanup shared clients (optional - for testing)
-    public static void ClearSharedClients()
-    {
-        foreach (var client in _sharedClients.Values)
-        {
-            (client as IDisposable)?.Dispose();
-        }
-        _sharedClients.Clear();
-    }
-
-    private class ConnectionOptions
-    {
-        public string Url { get; set; } = string.Empty;
-        public string? AuthToken { get; set; }
-    }
+    
 }

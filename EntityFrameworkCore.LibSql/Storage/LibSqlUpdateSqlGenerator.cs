@@ -9,7 +9,4 @@ public class LibSqlUpdateSqlGenerator : UpdateSqlGenerator
         : base(dependencies)
     {
     }
-
-    // Only override methods that actually exist in the base class
-    // Most of the base functionality should work fine for SQLite/LibSQL
 }

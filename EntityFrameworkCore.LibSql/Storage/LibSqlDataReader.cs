@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Data;
 using System.Data.Common;
+using System.Reflection;
 using Libsql.Client;
 
 namespace EntityFrameworkCore.LibSql.Storage;
@@ -13,19 +14,92 @@ public class LibSqlDataReader : DbDataReader
     private int _currentRowIndex = -1;
     private bool _disposed;
 
-    public LibSqlDataReader(object result)
+public LibSqlDataReader(object result)
+{
+    _result = result ?? throw new ArgumentNullException(nameof(result));
+    
+    // Initialize with empty defaults
+    _rows = new List<Dictionary<string, object?>>();
+    _columnNames = Array.Empty<string>();
+    
+    try
     {
-        _result = result ?? throw new ArgumentNullException(nameof(result));
+        var resultType = result.GetType();
         
-        // Parse the result based on the actual Libsql.Client API
-        // This is a placeholder implementation - adjust based on actual API
-        _rows = new List<Dictionary<string, object?>>();
-        _columnNames = Array.Empty<string>();
+        // Get Columns property
+        var columnsProperty = resultType.GetProperty("Columns");
+        if (columnsProperty != null)
+        {
+            var columns = columnsProperty.GetValue(result);
+            if (columns is IEnumerable<string> columnNames)
+            {
+                _columnNames = columnNames.ToArray();
+            }
+        }
         
-        // TODO: Extract actual data from the result object
-        // For now, create empty result set
+        // Get Rows property  
+        var rowsProperty = resultType.GetProperty("Rows");
+        if (rowsProperty != null)
+        {
+            var rows = rowsProperty.GetValue(result);
+            
+            if (rows is IEnumerable rowsEnumerable)
+            {
+                foreach (var row in rowsEnumerable)
+                {
+                    // Each row is Libsql.Client.Value[] - convert to object[]
+                    if (row is Array valueArray)
+                    {
+                        var rowDict = new Dictionary<string, object?>();
+                        
+                        for (int i = 0; i < valueArray.Length; i++)
+                        {
+                            string columnName = i < _columnNames.Length ? _columnNames[i] : $"Column{i}";
+                            
+                            // Get the actual value from the Value object
+                            var value = valueArray.GetValue(i);
+                            var actualValue = ExtractValueFromLibSqlValue(value);
+                            
+                            rowDict[columnName] = actualValue;
+                        }
+                        
+                        _rows.Add(rowDict);
+                    }
+                }
+            }
+        }
+        
+        Console.WriteLine($"DEBUG: Successfully parsed {_rows.Count} rows with {_columnNames.Length} columns");
     }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"DEBUG: Error parsing result: {ex.Message}");
+    }
+}
 
+private static object? ExtractValueFromLibSqlValue(object? libsqlValue)
+{
+    if (libsqlValue == null) return null;
+    
+    // The Libsql.Client.Value should have a way to get the actual value
+    // This might be a property like Value, or a method
+    var valueType = libsqlValue.GetType();
+    
+    // Try common patterns for getting the actual value
+    var valueProperty = valueType.GetProperty("Value") ?? 
+                       valueType.GetProperty("Content") ??
+                       valueType.GetProperty("Data");
+    
+    if (valueProperty != null)
+    {
+        return valueProperty.GetValue(libsqlValue);
+    }
+    
+    // Fallback - return the object itself
+    return libsqlValue;
+}
+    
+    
     public override int FieldCount => _columnNames.Length;
     public override bool HasRows => _rows.Count > 0;
     public override bool IsClosed => _disposed;

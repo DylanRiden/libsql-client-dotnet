@@ -106,39 +106,21 @@ public static class LibSqlServiceCollectionExtensions
     public static IServiceCollection AddEntityFrameworkLibSql(this IServiceCollection serviceCollection)
     {
         var builder = new EntityFrameworkRelationalServicesBuilder(serviceCollection)
+            // Core provider identification
             .TryAdd<LoggingDefinitions, LibSqlLoggingDefinitions>()
             .TryAdd<IDatabaseProvider, DatabaseProvider<LibSqlOptionsExtension>>()
-            .TryAdd<IExecutionStrategyFactory, LibSqlExecutionStrategyFactory>()
-            .TryAdd<IQueryableMethodTranslatingExpressionVisitorFactory, LibSqlQueryableMethodTranslatingExpressionVisitorFactory>()
+        
+            // Only the services that need to be LibSQL-specific
             .TryAdd<IRelationalConnection, LibSqlConnection>()
-            .TryAdd<ISqlGenerationHelper, LibSqlSqlGenerationHelper>()
-            .TryAdd<IRelationalTypeMappingSource, LibSqlTypeMappingSource>()
-            .TryAdd<IQuerySqlGeneratorFactory, LibSqlQuerySqlGeneratorFactory>()
-            .TryAdd<ISqlExpressionFactory, LibSqlSqlExpressionFactory>()
-            .TryAdd<IRelationalTransactionFactory, LibSqlTransactionFactory>()
-            .TryAdd<IModificationCommandBatchFactory, LibSqlModificationCommandBatchFactory>()
-            .TryAdd<IUpdateSqlGenerator, LibSqlUpdateSqlGenerator>()
-            .TryAdd<IRelationalCommandBuilderFactory, LibSqlCommandBuilderFactory>()
             .TryAdd<IRelationalDatabaseCreator, LibSqlDatabaseCreator>()
-            .TryAdd<IHistoryRepository, LibSqlHistoryRepository>()
             .TryAdd<IMigrationsSqlGenerator, LibSqlMigrationsSqlGenerator>()
-            .TryAdd<IRelationalAnnotationProvider, LibSqlAnnotationProvider>()
-            .TryAdd<IMethodCallTranslatorProvider, LibSqlMethodCallTranslatorProvider>()
-            .TryAdd<IMemberTranslatorProvider, LibSqlMemberTranslatorProvider>()
-            .TryAdd<IRelationalParameterBasedSqlProcessorFactory, LibSqlParameterBasedSqlProcessorFactory>()
-            .TryAddProviderSpecificServices(b =>
-            {
-                // Only register services that are truly provider-specific and not already handled by the main builder
-                b.TryAdd(typeof(IRelationalCommand), typeof(LibSqlCommand), ServiceLifetime.Singleton);
-                b.TryAdd(typeof(IRelationalCommandBuilder),
-                    p => new LibSqlCommandBuilder(
-                        (IRelationalTypeMappingSource)p.GetRequiredService(typeof(IRelationalTypeMappingSource))),
-                    ServiceLifetime.Singleton);
-            });
+        
+            // Type mappings (might be needed for LibSQL-specific types)
+            .TryAdd<IRelationalTypeMappingSource, LibSqlTypeMappingSource>();
 
-        // Add core services - this registers other essential services
+        // Let EF Core handle everything else with defaults
         builder.TryAddCoreServices();
-
         return serviceCollection;
     }
+    
 }

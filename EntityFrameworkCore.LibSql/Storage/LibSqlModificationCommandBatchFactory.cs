@@ -11,5 +11,8 @@ public class LibSqlModificationCommandBatchFactory : IModificationCommandBatchFa
         _dependencies = dependencies;
     }
 
-    public ModificationCommandBatch Create() => new SingularModificationCommandBatch(_dependencies);
+    public ModificationCommandBatch Create() 
+    {
+        return new SingularModificationCommandBatch(_dependencies);
+    }
 }

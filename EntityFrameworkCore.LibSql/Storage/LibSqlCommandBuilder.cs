@@ -53,13 +53,14 @@ public class LibSqlCommandBuilder : IRelationalCommandBuilder
 
     public IRelationalCommandBuilder AddParameter(IRelationalParameter parameter)
     {
+        Console.WriteLine($"DEBUG LibSqlCommandBuilder.AddParameter: {parameter.InvariantName}");
         _parameters.Add(parameter);
         return this;
     }
 
     public IRelationalCommandBuilder AddParameter(string invariantName, string name)
     {
-        // Create a simple parameter without complex type mapping
+        Console.WriteLine($"DEBUG LibSqlCommandBuilder.AddParameter: {invariantName} = {name}");
         var parameter = new SimpleRelationalParameter(invariantName, name);
         return AddParameter(parameter);
     }

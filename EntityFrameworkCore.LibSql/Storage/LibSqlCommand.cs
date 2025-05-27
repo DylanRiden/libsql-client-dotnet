@@ -92,12 +92,18 @@ public class LibSqlCommand : IRelationalCommand
         var command = (LibSqlDbCommand)connection.CreateCommand();
         command.CommandText = _commandText;
 
+        Console.WriteLine($"DEBUG LibSqlCommand: Creating command with text: {_commandText}");
+        Console.WriteLine($"DEBUG LibSqlCommand: Parameter count: {_parameters.Count}");
+
         // Add parameters
         for (int i = 0; i < _parameters.Count; i++)
         {
             var parameter = command.CreateParameter();
             parameter.ParameterName = _parameters[i].InvariantName;
             parameter.Value = parameterObject.ParameterValues[_parameters[i].InvariantName];
+        
+            Console.WriteLine($"DEBUG LibSqlCommand: Parameter {parameter.ParameterName} = {parameter.Value}");
+        
             command.Parameters.Add(parameter);
         }
 
