@@ -1,6 +1,8 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
+using System.Threading.Tasks;
 using Libsql.Client;
 
 namespace EntityFrameworkCore.LibSql.Storage;
@@ -9,6 +11,9 @@ public class LibSqlDbConnection : DbConnection
 {
     private readonly string _connectionString;
     private static readonly ConcurrentDictionary<string, IDatabaseClient> _sharedClients = new();
+    private static readonly Lazy<Task<IDatabaseClient>> _memoryClientLazy = new(() => CreateMemoryClient(), true);
+    private static IDatabaseClient? _sharedMemoryClient;
+    private static readonly object _memoryClientLock = new();
     private IDatabaseClient? _client;
     private ConnectionState _state = ConnectionState.Closed;
 
@@ -37,22 +42,24 @@ public class LibSqlDbConnection : DbConnection
 
         try
         {
-            // For in-memory databases, share the same client instance
-            if (_connectionString == ":memory:")
+            if (_connectionString.StartsWith(":memory:", StringComparison.OrdinalIgnoreCase))
             {
-                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
+                _client = _sharedClients.GetOrAdd(_connectionString, _ => 
+                    CreateMemoryClient(_connectionString).GetAwaiter().GetResult());
             }
             else
             {
                 // For file databases, create individual clients
-                _client = CreateClient(_connectionString);
+                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
+                Console.WriteLine($"DEBUG: Using file client instance: {_client.GetHashCode()}");
             }
                 
             _state = ConnectionState.Open;
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"ERROR in Open: {ex}");
             _state = ConnectionState.Broken;
             throw;
         }
@@ -65,22 +72,36 @@ public class LibSqlDbConnection : DbConnection
 
         try
         {
-            // For in-memory databases, share the same client instance  
-            if (_connectionString == ":memory:")
+            if (_connectionString.StartsWith(":memory:", StringComparison.OrdinalIgnoreCase))
             {
-                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
+                if (_sharedClients.TryGetValue(_connectionString, out var existingClient))
+                {
+                    _client = existingClient;
+                }
+                else
+                {
+                    var newClient = await CreateMemoryClient(_connectionString);
+                    _client = _sharedClients.GetOrAdd(_connectionString, newClient);
+                    if (!ReferenceEquals(_client, newClient))
+                    {
+                        newClient.Dispose();
+                    }
+                }
             }
             else
             {
                 // For file databases, create individual clients
-                _client = CreateClient(_connectionString);
+                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
+                Console.WriteLine($"DEBUG: Using file client instance (async): {_client.GetHashCode()}");
             }
-
+                
             _state = ConnectionState.Open;
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
+            Console.WriteLine($"DEBUG: OpenAsync completed successfully");
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"ERROR in OpenAsync: {ex}");
             _state = ConnectionState.Broken;
             throw;
         }
@@ -98,11 +119,12 @@ public class LibSqlDbConnection : DbConnection
             if (_connectionString != ":memory:" && _client != null)
             {
                 (_client as IDisposable)?.Dispose();
+                _client = null; // Only null out non-shared clients
             }
+            // For :memory: databases, keep the _client reference to maintain sharing
         }
         finally
         {
-            _client = null;
             var previousState = _state;
             _state = ConnectionState.Closed;
             OnStateChange(new StateChangeEventArgs(previousState, ConnectionState.Closed));
@@ -138,13 +160,46 @@ public class LibSqlDbConnection : DbConnection
 
     private static IDatabaseClient CreateClient(string connectionString)
     {
-        var options = ParseConnectionString(connectionString);
-        return DatabaseClient.Create(opts =>
+        try
         {
-            opts.Url = options.Url;
-            if (!string.IsNullOrEmpty(options.AuthToken))
-                opts.AuthToken = options.AuthToken;
-        });
+            var options = ParseConnectionString(connectionString);
+            // For file paths, ensure we have a proper URI format
+            var url = options.Url;
+            if (!url.StartsWith("file:") && !url.StartsWith("http") && !url.StartsWith("ws"))
+            {
+                // Convert local file path to proper URI format
+                url = $"file:{Path.GetFullPath(url.Replace("file:", ""))}";
+            }
+            
+            return DatabaseClient.Create(opts =>
+            {
+                opts.Url = url;
+                if (!string.IsNullOrEmpty(options.AuthToken))
+                    opts.AuthToken = options.AuthToken;
+            }).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to create database client for '{connectionString}'. Make sure the path is valid and accessible.", ex);
+        }
+    }
+
+    private static async Task<IDatabaseClient> CreateMemoryClient(string connectionString = ":memory:")
+    {
+        try
+        {
+            var options = ParseConnectionString(connectionString);
+            return await DatabaseClient.Create(opts =>
+            {
+                opts.Url = connectionString;
+                if (!string.IsNullOrEmpty(options.AuthToken))
+                    opts.AuthToken = options.AuthToken;
+            });
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to create in-memory database client: {ex.Message}", ex);
+        }
     }
 
     private static ConnectionOptions ParseConnectionString(string connectionString)
