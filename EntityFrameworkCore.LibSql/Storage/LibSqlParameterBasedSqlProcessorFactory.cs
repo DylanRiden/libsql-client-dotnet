@@ -11,8 +11,19 @@ public class LibSqlParameterBasedSqlProcessorFactory : IRelationalParameterBased
         _dependencies = dependencies;
     }
 
-    public RelationalParameterBasedSqlProcessor Create(RelationalParameterBasedSqlProcessorParameters parameters)
+    public RelationalParameterBasedSqlProcessor Create(bool useRelationalNulls)
     {
-        return new RelationalParameterBasedSqlProcessor(_dependencies, parameters);
+        return new LibSqlParameterBasedSqlProcessor(_dependencies, useRelationalNulls);
     }
+}
+
+public class LibSqlParameterBasedSqlProcessor : RelationalParameterBasedSqlProcessor
+{
+    public LibSqlParameterBasedSqlProcessor(
+        RelationalParameterBasedSqlProcessorDependencies dependencies,
+        bool useRelationalNulls)
+        : base(dependencies, useRelationalNulls)
+    {
+    }
+    // No custom logic needed unless you want to override base behavior
 }

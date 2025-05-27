@@ -36,30 +36,5 @@ public class LibSqlHistoryRepository : HistoryRepository
     public override string GetBeginIfExistsScript(string migrationId) => "";
     public override string GetEndIfScript() => "";
     protected override bool InterpretExistsResult(object? value) => (long?)value > 0;
-
-    public override LockReleaseBehavior LockReleaseBehavior => LockReleaseBehavior.Connection;
-
-    public override IMigrationsDatabaseLock AcquireDatabaseLock()
-    {
-        return new NoopMigrationsDatabaseLock(this);
-    }
-
-    public override Task<IMigrationsDatabaseLock> AcquireDatabaseLockAsync(CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult<IMigrationsDatabaseLock>(new NoopMigrationsDatabaseLock(this));
-    }
-
-    private sealed class NoopMigrationsDatabaseLock : IMigrationsDatabaseLock
-    {
-        public NoopMigrationsDatabaseLock(IHistoryRepository historyRepository)
-        {
-            HistoryRepository = historyRepository;
-        }
-
-        public IHistoryRepository HistoryRepository { get; }
-        public void Dispose() { }
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        public void ReacquireIfNeeded(bool throwOnFailure, bool? useTransaction) { }
-        public Task ReacquireIfNeededAsync(bool throwOnFailure, bool? useTransaction, CancellationToken cancellationToken = default) => Task.CompletedTask;
-    }
+    
 }
