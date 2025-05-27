@@ -69,16 +69,27 @@ public class LibSqlTypeMappingSource : RelationalTypeMappingSource
         var clrType = mappingInfo.ClrType;
         var storeTypeName = mappingInfo.StoreTypeName;
 
+        // First check for CLR type mappings
         if (clrType != null)
         {
             var nonNullableType = Nullable.GetUnderlyingType(clrType) ?? clrType;
-            if (_clrTypeMappings.TryGetValue(nonNullableType, out var mapping))
-                return mapping;
+            if (_clrTypeMappings.TryGetValue(nonNullableType, out var clrMapping))
+            {
+                Console.WriteLine($"Found CLR mapping for {nonNullableType.Name}: {clrMapping.StoreType}");
+                return clrMapping;
+            }
         }
 
+        // Then check for store type mappings
         if (storeTypeName != null && _storeTypeMappings.TryGetValue(storeTypeName, out var storeMapping))
+        {
+            Console.WriteLine($"Found store mapping for {storeTypeName}: {storeMapping.ClrType.Name}");
             return storeMapping;
+        }
 
-        return base.FindMapping(mappingInfo);
+        // Fall back to base implementation
+        var baseMapping = base.FindMapping(mappingInfo);
+        Console.WriteLine($"Using base mapping: {baseMapping?.GetType().Name ?? "null"}");
+        return baseMapping;
     }
 }

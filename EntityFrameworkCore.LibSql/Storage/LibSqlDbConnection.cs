@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using System.Collections.Concurrent;
+using System.Data;
 using System.Data.Common;
 using Libsql.Client;
 
@@ -7,6 +8,7 @@ namespace EntityFrameworkCore.LibSql.Storage;
 public class LibSqlDbConnection : DbConnection
 {
     private readonly string _connectionString;
+    private static readonly ConcurrentDictionary<string, IDatabaseClient> _sharedClients = new();
     private IDatabaseClient? _client;
     private ConnectionState _state = ConnectionState.Closed;
 
@@ -30,15 +32,21 @@ public class LibSqlDbConnection : DbConnection
 
     public override void Open()
     {
+        if (_state == ConnectionState.Open)
+            return;
+
         try
         {
-            var options = ParseConnectionString(_connectionString);
-            _client = DatabaseClient.Create(opts =>
+            // For in-memory databases, share the same client instance
+            if (_connectionString == ":memory:")
             {
-                opts.Url = options.Url;
-                if (!string.IsNullOrEmpty(options.AuthToken))
-                    opts.AuthToken = options.AuthToken;
-            });
+                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
+            }
+            else
+            {
+                // For file databases, create individual clients
+                _client = CreateClient(_connectionString);
+            }
                 
             _state = ConnectionState.Open;
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
@@ -50,24 +58,26 @@ public class LibSqlDbConnection : DbConnection
         }
     }
 
-    public override Task OpenAsync(CancellationToken cancellationToken)
+    public override async Task OpenAsync(CancellationToken cancellationToken)
     {
         if (_state == ConnectionState.Open)
-            return Task.CompletedTask;
+            return;
 
         try
         {
-            var options = ParseConnectionString(_connectionString);
-            _client = DatabaseClient.Create(opts =>
+            // For in-memory databases, share the same client instance  
+            if (_connectionString == ":memory:")
             {
-                opts.Url = options.Url;
-                if (!string.IsNullOrEmpty(options.AuthToken))
-                    opts.AuthToken = options.AuthToken;
-            });
+                _client = _sharedClients.GetOrAdd(_connectionString, _ => CreateClient(_connectionString));
+            }
+            else
+            {
+                // For file databases, create individual clients
+                _client = CreateClient(_connectionString);
+            }
 
             _state = ConnectionState.Open;
             OnStateChange(new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open));
-            return Task.CompletedTask;
         }
         catch
         {
@@ -83,7 +93,12 @@ public class LibSqlDbConnection : DbConnection
 
         try
         {
-            (_client as IDisposable)?.Dispose();
+            // Don't dispose shared clients (for :memory: databases)
+            // Only dispose non-shared clients (for file databases)
+            if (_connectionString != ":memory:" && _client != null)
+            {
+                (_client as IDisposable)?.Dispose();
+            }
         }
         finally
         {
@@ -119,6 +134,17 @@ public class LibSqlDbConnection : DbConnection
             Close();
         }
         base.Dispose(disposing);
+    }
+
+    private static IDatabaseClient CreateClient(string connectionString)
+    {
+        var options = ParseConnectionString(connectionString);
+        return DatabaseClient.Create(opts =>
+        {
+            opts.Url = options.Url;
+            if (!string.IsNullOrEmpty(options.AuthToken))
+                opts.AuthToken = options.AuthToken;
+        });
     }
 
     private static ConnectionOptions ParseConnectionString(string connectionString)
@@ -175,6 +201,16 @@ public class LibSqlDbConnection : DbConnection
         {
             return connectionString;
         }
+    }
+
+    // Static method to cleanup shared clients (optional - for testing)
+    public static void ClearSharedClients()
+    {
+        foreach (var client in _sharedClients.Values)
+        {
+            (client as IDisposable)?.Dispose();
+        }
+        _sharedClients.Clear();
     }
 
     private class ConnectionOptions
