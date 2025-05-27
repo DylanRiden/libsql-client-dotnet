@@ -10,8 +10,8 @@ public class LibSqlParameterCollection : DbParameterCollection
     public override int Count => _parameters.Count;
     public override object SyncRoot => _parameters;
 
-    // Add indexer to access parameters
-    public LibSqlParameter this[int index] => _parameters[index];
+    // Add 'new' keyword to fix warning CS0108
+    public new LibSqlParameter this[int index] => _parameters[index];
 
     public override int Add(object value)
     {

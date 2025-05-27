@@ -62,6 +62,8 @@ public class LibSqlTypeMappingSource : RelationalTypeMappingSource
             { "BLOB", new ByteArrayTypeMapping("BLOB") },
             { "NUMERIC", new StringTypeMapping("NUMERIC") }
         };
+
+        Console.WriteLine($"DEBUG LibSqlTypeMappingSource: Initialized with {_clrTypeMappings.Count} CLR mappings and {_storeTypeMappings.Count} store mappings");
     }
 
     protected override RelationalTypeMapping? FindMapping(in RelationalTypeMappingInfo mappingInfo)
@@ -69,27 +71,45 @@ public class LibSqlTypeMappingSource : RelationalTypeMappingSource
         var clrType = mappingInfo.ClrType;
         var storeTypeName = mappingInfo.StoreTypeName;
 
+        Console.WriteLine($"DEBUG LibSqlTypeMappingSource.FindMapping: CLR={clrType?.Name ?? "null"}, Store={storeTypeName ?? "null"}, Size={mappingInfo.Size}, Precision={mappingInfo.Precision}, Scale={mappingInfo.Scale}");
+
         // First check for CLR type mappings
         if (clrType != null)
         {
             var nonNullableType = Nullable.GetUnderlyingType(clrType) ?? clrType;
             if (_clrTypeMappings.TryGetValue(nonNullableType, out var clrMapping))
             {
-                Console.WriteLine($"Found CLR mapping for {nonNullableType.Name}: {clrMapping.StoreType}");
+                Console.WriteLine($"DEBUG LibSqlTypeMappingSource: Found CLR mapping for {nonNullableType.Name}: {clrMapping.StoreType} -> {clrMapping.GetType().Name}");
                 return clrMapping;
+            }
+            else
+            {
+                Console.WriteLine($"DEBUG LibSqlTypeMappingSource: No CLR mapping found for {nonNullableType.Name}");
             }
         }
 
         // Then check for store type mappings
         if (storeTypeName != null && _storeTypeMappings.TryGetValue(storeTypeName, out var storeMapping))
         {
-            Console.WriteLine($"Found store mapping for {storeTypeName}: {storeMapping.ClrType.Name}");
+            Console.WriteLine($"DEBUG LibSqlTypeMappingSource: Found store mapping for {storeTypeName}: {storeMapping.ClrType.Name} -> {storeMapping.GetType().Name}");
             return storeMapping;
+        }
+        else if (storeTypeName != null)
+        {
+            Console.WriteLine($"DEBUG LibSqlTypeMappingSource: No store mapping found for {storeTypeName}");
         }
 
         // Fall back to base implementation
         var baseMapping = base.FindMapping(mappingInfo);
-        Console.WriteLine($"Using base mapping: {baseMapping?.GetType().Name ?? "null"}");
+        if (baseMapping != null)
+        {
+            Console.WriteLine($"DEBUG LibSqlTypeMappingSource: Using base mapping: {baseMapping.GetType().Name} -> {baseMapping.StoreType}");
+        }
+        else
+        {
+            Console.WriteLine($"DEBUG LibSqlTypeMappingSource: No base mapping found either!");
+        }
+        
         return baseMapping;
     }
 }
